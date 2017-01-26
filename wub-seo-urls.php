@@ -3,7 +3,7 @@
 * Plugin Name: Wub SEO URLS
 * Plugin URI: http://woocommerce-url-builder.co.za/
 * Description: Fixes urls for wooCommerce
-* Version: 1.91
+* Version: 1.92
 * Author: Richard Miles
 * Author URI: http://woocommerce-url-builder.co.za/
 * License: GPL12
@@ -108,7 +108,6 @@ Class Wub_seo_url {
           // fetch all posts which have no assigned term
         $posts = $this->custom_get_posts($post_type, $taxonomy_name, $this->custom_get_terms($taxonomy_name));
 
-        //adds default rewrite rules
         foreach ($posts as $post) {
 
          if ($post->post_type == $post_type) {
@@ -117,15 +116,16 @@ Class Wub_seo_url {
            $rewrite_string = '^';
 
            foreach ($terms as $term) {
+
              $rewrite_string .= $term.'/';
            }
+
            $rewrite_string .= '('. $post->post_name . ')' . '/?$';
 
-            // create post link with grandparent term hierachical prefix
            add_rewrite_rule($rewrite_string, 'index.php?post_type='.$post_type.'&name=$matches[1]', 'top' );
-
          }
        }
+
 
           //gets categories of taxonomy
        $categories = $this->custom_get_terms($taxonomy_name);
