@@ -3,7 +3,7 @@
 * Plugin Name: Wub SEO URLS
 * Plugin URI: https://wubpress.com
 * Description: Creates Custom URL structures for WooCommerce
-* Version: 2.1
+* Version: 2.4
 * Author: Richard Miles
 * Author URI: https://wubpress.com
 * License: GPL12
@@ -23,6 +23,8 @@ if (!defined( 'WPINC' )) {
   die;
 }
 
+ob_start();
+
 /**
  * Constants
  */
@@ -31,6 +33,13 @@ define('WUB_PLUGIN_PATH', plugin_dir_path( __FILE__ ));
 define('WUB_OPTION', 'wub_options');
 
 Class Wub_seo_url {
+
+  public static $obj = '';
+  public static $pattern = [];
+  public static $type = '';
+  public static $taxonomy = '';
+  public static $post_type = '';
+  public static $paged = false;
 
   /**
    * $admin_page_title Page title for Wub SEO URLS Settings page
@@ -100,148 +109,41 @@ Class Wub_seo_url {
   * wub_seo_rewrite_rules function to be hooked into the init action and creates rewrite
   * rules
   */
+
   public function wub_seo_rewrite_rules() {
 
-    $wub_current_post_type_name;
+    global $wp;
 
-    foreach (get_post_types(['public'=>true, '_builtin'=>false], 'names') as $post_type) {
-      $taxonomy_name = get_option('wub_post_type_' . $post_type);
+    $pattern = $this->wub_is_valid(1);
 
-      if ($taxonomy_name!=='default' && isset($taxonomy_name) && !empty($taxonomy_name)) {
-
-        $wub_current_post_type_name = $taxonomy_name;
-
-          // fetch all posts which have no assigned term
-        $posts = $this->custom_get_posts($post_type, $taxonomy_name, $this->custom_get_terms($taxonomy_name));
-
-        include_once(ABSPATH.'wp-admin/includes/plugin.php');
-
-        $is_poly_active = is_plugin_active('polylang/polylang.php');
-
-        if ($is_poly_active) {
-          $language =  pll_current_language();
-        }
-
-        foreach ($posts as $post) {
-
-          if ($post->post_type == $post_type) {
-
-
-            if (class_exists('WPSEO_Primary_Term')) {
-              $cat = new WPSEO_Primary_Term($taxonomy_name, $post->ID);
-              $cat = $cat->get_primary_term();
-            }
-
-            if (!empty($cat)) {
-              $rewrite_string = '^';
-              if ($is_poly_active) {
-                $rewrite_string .= $language.'/';
-              }
-
-              $term = get_term($cat);
-              $parent_term = get_term($term->parent, $taxonomy_name);
-              if (isset($parent_term->slug)) {
-                $grand_parent_term = get_term($parent_term->parent, $wub_current_post_type_name);
-
-                if (isset($grand_parent_term->slug)) {
-
-                  $great_grand_parent_term = get_term($grand_parent_term->parent, $wub_current_post_type_name);
-
-                  if(isset($great_grand_parent_term->slug)) {
-                    $rewrite_string .= $great_grand_parent_term->slug . '/' . $grand_parent_term->slug . '/' . $parent_term->slug . '/' . $term->slug.'/';
-                  } else {
-                    $rewrite_string .= $grand_parent_term->slug . '/' . $parent_term->slug . '/' . $term->slug.'/';
-                  }
-                } else {
-                  $rewrite_string .= $parent_term->slug . '/' . $term->slug.'/';
-                }
-              } else {
-                $rewrite_string .= $term->slug.'/';
-              }
-
-
-            } else {
-
-              $terms = wp_get_post_terms($post->ID, $taxonomy_name, ['fields' => 'slugs', 'orderby' => 'term_id']);
-              $rewrite_string = '^';
-              if ($is_poly_active) {
-                $rewrite_string .= $language.'/';
-              }
-
-              foreach ($terms as $term) {
-                $rewrite_string .= $term.'/';
-              }
-            }
-            $rewrite_string .= '('. $post->post_name . ')' . '/?$';
-
-            add_rewrite_rule($rewrite_string, 'index.php?post_type='.$post_type.'&name=$matches[1]', 'top' );
-          }
-        }
-
-
-          //gets categories of taxonomy
-        $categories = $this->custom_get_terms($taxonomy_name);
-
-
-        foreach ($categories as $category) {
-              //gets and checks if there is a parent term of category
-          $parent_term = get_term($category->parent, $taxonomy_name);
-
-
-          if (isset($parent_term->slug)) {
-                //gets and checks if there is a grandparent term of category
-            $grand_parent_term = get_term($parent_term->parent, $taxonomy_name);
-
-            if (isset($grand_parent_term->slug)) {
-
-                  //create term link to grandparent term
-              add_rewrite_rule('^'.$grand_parent_term->slug.'/'.$parent_term->slug.'/'.$category->slug.'/?$', 'index.php?'.$taxonomy_name.'='.$category->slug.'&child_of='.$parent_term->slug,'top');
-
-
-                  //create term link to grandparent term with pagination
-              add_rewrite_rule('^'.$grand_parent_term->slug.'/'.$parent_term->slug.'/'.$category->slug.'(/page/([0-9]+))/?$', 'index.php?'.$taxonomy_name.'='.$category->slug.'&child_of='.$parent_term->slug.'&paged=$matches[2]','top');
-
-              if ($is_poly_active) {
-                add_rewrite_rule('^'.$language.'/'.$grand_parent_term->slug.'/'.$parent_term->slug.'/'.$category->slug.'(/page/([0-9]+))/?$', 'index.php?'.$taxonomy_name.'='.$category->slug.'&child_of='.$parent_term->slug.'&paged=$matches[2]','top');
-
-                add_rewrite_rule('^'.$language.'/'. $grand_parent_term->slug.'/'.$parent_term->slug.'/'.$category->slug.'/?$', 'index.php?'.$taxonomy_name.'='.$category->slug.'&child_of='.$parent_term->slug,'top');
-              }
-
-
-            } else {
-
-              if ($is_poly_active) {
-                add_rewrite_rule('^'.$language.'/'.$parent_term->slug.'/'.$category->slug.'/?$', 'index.php?'.$taxonomy_name.'='.$category->slug.'&child_of='.$parent_term->slug,'top');
-
-                                //create term link to parent term with pagination
-                add_rewrite_rule('^'.$language.'/'.$parent_term->slug.'/'.$category->slug.'(/page/([0-9]+))/?$', 'index.php?'.$taxonomy_name.'='.$category->slug.'&child_of='.$parent_term->slug.'&paged=$matches[2]', 'top');
-
-              }
-                  //create term link to parent term
-              add_rewrite_rule('^'.$parent_term->slug.'/'.$category->slug.'/?$', 'index.php?'.$taxonomy_name.'='.$category->slug.'&child_of='.$parent_term->slug,'top');
-
-                  //create term link to parent term with pagination
-              add_rewrite_rule('^'.$parent_term->slug.'/'.$category->slug.'(/page/([0-9]+))/?$', 'index.php?'.$taxonomy_name.'='.$category->slug.'&child_of='.$parent_term->slug.'&paged=$matches[2]', 'top');
-            }
-
-          } else {
-
-              //create term link to term
-            add_rewrite_rule('^'.$category->slug.'/?$', 'index.php?'.$taxonomy_name.'='.$category->slug,'top');
-
-            if ($is_poly_active) {
-              add_rewrite_rule('^'.$language.'/'.$category->slug.'/?$', 'index.php?'.$taxonomy_name.'='.$category->slug,'top');
-
-                         //create term link to term with pagination
-              add_rewrite_rule('^'.$language.'/'.$category->slug.'(/page/([0-9]+))/?$', 'index.php?'.$taxonomy_name.'='.$category->slug.'&paged=$matches[2]','top');
-            }
-
-              //create term link to term with pagination
-            add_rewrite_rule('^'.$category->slug.'(/page/([0-9]+))/?$', 'index.php?'.$taxonomy_name.'='.$category->slug.'&paged=$matches[2]','top');
-          }
-        }
-      }
+    if (!$pattern) {
+      return;
     }
+    $rewrite_string = '^';
+    foreach ($pattern as $value) {
+      if(end($pattern) == $value) {
+        self::$obj = $value;
+        continue;
+      }
+      $rewrite_string .= $value . '/';
+    }
+    $pag_rewrite_string .= $rewrite_string . '('. self::$obj . ')' . '(/page/([0-9]+))/?$';
+
+    $rewrite_string .= '('. self::$obj . ')' . '/?$';
+    $query = 'index.php?' . self::$taxonomy[0]->taxonomy . '='.self::$obj;
+
+    if (self::$type === 'tax') {
+      if (self::$paged) {
+        $pag_query = 'index.php?' . self::$taxonomy . '='.self::$obj . '&paged=$matches[3]';
+        add_rewrite_rule($pag_rewrite_string, $pag_query , 'top');
+      } else {
+        add_rewrite_rule($rewrite_string, $query , 'top');
+      }
+    } else {
+      $query = 'index.php?post_type='.self::$post_type.'&name=' . self::$obj;
+      add_rewrite_rule($rewrite_string, $query, 'top' );
+    }
+    flush_rewrite_rules();
   }
 
   /**
@@ -265,6 +167,15 @@ Class Wub_seo_url {
       AND $wpdb->posts.post_status = 'publish'
       AND $wpdb->posts.post_type = '$post_type'
       ");
+
+    return $a;
+  }
+
+  public function custom_get_post_types() {
+
+    global $wpdb;
+
+    $a = $wpdb->get_results("SELECT DISTINCT post_type FROM $wpdb->posts WHERE post_type NOT IN ('post', 'page', 'attachment', 'revision', 'nav_menu_item') AND post_status = 'publish'");
 
     return $a;
   }
@@ -310,13 +221,24 @@ Class Wub_seo_url {
 
     $wub_current_post_type_name;
 
+    $rewrite_string = '';
+
+    $sql_post_types = $this->custom_get_post_types();
+
+    $post_types = [];
+
+    foreach ($sql_post_types as $post_type) {
+      $post_types[] = $post_type->post_type;
+    }
+
     //loops through each post type and matching taxonomy that has been selected
-    foreach (get_post_types(['public'=>true, '_builtin'=>false], 'names') as $post_type) {
+    foreach ($post_types as $post_type) {
       $taxonomy_name = get_option('wub_post_type_' . $post_type);
       if ($taxonomy===$taxonomy_name) {
         $wub_current_post_type_name = $taxonomy_name;
       }
     }
+
 
     //return if not set or default
     if (!isset($wub_current_post_type_name) || $wub_current_post_type_name==='default') {
@@ -324,27 +246,42 @@ Class Wub_seo_url {
     }
 
     $parent_term = get_term($term->parent, $wub_current_post_type_name);
+
     if (isset($parent_term->slug)) {
       $grand_parent_term = get_term($parent_term->parent, $wub_current_post_type_name);
       if (isset($grand_parent_term->slug)) {
        if ($is_poly_active) {
-        return get_home_url() . '/' . $language . '/'. $grand_parent_term->slug . '/'. $parent_term->slug . '/' . $term->slug . '/';
+        $rewrite_string = $language . '/'. $grand_parent_term->slug . '/'. $parent_term->slug . '/' . $term->slug . '/';
+      } else {
+
+        $rewrite_string = $grand_parent_term->slug . '/'. $parent_term->slug . '/' . $term->slug . '/';
       }
 
-      return get_home_url() . '/'. $grand_parent_term->slug . '/'. $parent_term->slug . '/' . $term->slug . '/';
     } else {
       if ($is_poly_active) {
+        $rewrite_string =  $language . '/'. $parent_term->slug . '/' . $term->slug . '/';
+      } else {
+       $rewrite_string = $parent_term->slug . '/' . $term->slug . '/';
+     }
 
-        return get_home_url() . '/' .  $language . '/'. $parent_term->slug . '/' . $term->slug . '/';
-      }
-      return get_home_url() . '/'. $parent_term->slug . '/' . $term->slug . '/';
-    }
-  } else {
-   if ($is_poly_active) {
-     return get_home_url() . '/' . $language . '/'. $term->slug . '/';
    }
-   return get_home_url() . '/'. $term->slug . '/';
+ } else {
+   if ($is_poly_active) {
+    $rewrite_string = $language . '/'. $term->slug . '/';
+  } else {
+   $rewrite_string = $term->slug . '/';
  }
+}
+
+$tax = get_taxonomy($wub_current_post_type_name);
+
+if (strpos($_SERVER['REQUEST_URI'], $tax->rewrite['slug']) !== false) {
+  header ('HTTP/1.1 301 Moved Permanently');
+  header ('Location: ' . home_url(user_trailingslashit($rewrite_string)));
+  exit();
+}
+
+return home_url(user_trailingslashit($rewrite_string));
 }
 
 /**
@@ -360,9 +297,17 @@ public function wub_post_custom_link($post_link, $id = 0) {
 
   $wub_current_post_type_name;
 
+  $sql_post_types = $this->custom_get_post_types();
+
+  $post_types = [];
+
+  foreach ($sql_post_types as $post_type) {
+    $post_types[] = $post_type->post_type;
+  }
+
 
     //loops through each post type and matching taxonomy that has been selected
-  foreach (get_post_types(['public'=>true, '_builtin'=>false], 'names') as $post_type) {
+  foreach ($post_types as $post_type) {
     $taxonomy_name = get_option('wub_post_type_' . $post_type);
     if ($post_type===$post->post_type && isset($taxonomy_name)) {
       $wub_current_post_type_name = $taxonomy_name;
@@ -418,7 +363,80 @@ public function wub_post_custom_link($post_link, $id = 0) {
 
   $rewrite_string .= $post->post_name . '/';
 
+  if (strpos($_SERVER['REQUEST_URI'], $post->post_type . '/'.$post->post_name) !== false) {
+    header ('HTTP/1.1 301 Moved Permanently');
+    header ('Location: ' . home_url(user_trailingslashit($rewrite_string)));
+    exit();
+  }
+
+
   return home_url(user_trailingslashit($rewrite_string));
+}
+public function get_term_by_taxonomy($term) {
+  global $wpdb;
+  $a = $wpdb->get_results($wpdb->prepare("SELECT wp_term_taxonomy.taxonomy FROM wp_term_taxonomy INNER JOIN wp_terms ON wp_term_taxonomy.term_id=wp_terms.term_id WHERE wp_terms.slug = %s", $term));
+
+  return $a;
+}
+
+public function get_wub_post($post_name) {
+  global $wpdb;
+  $a = $wpdb->get_results($wpdb->prepare("SELECT post_name, post_type FROM wp_posts WHERE post_name = '%s'", $post_name));
+
+  self::$post_type=$post = $a[0]->post_type;
+
+  return $a[0]->post_name;
+}
+
+
+public function get_wub_tax($tax_name) {
+  global $wpdb;
+  $a = $wpdb->get_results($wpdb->prepare("SELECT slug FROM wp_terms WHERE slug = %s", $tax_name));
+
+  return $a[0]->slug;
+}
+
+public function wub_is_valid($num = 0) {
+
+  $current_url = array_filter(explode('/', $_SERVER['REQUEST_URI']), 'strlen');
+  $wub_post_or_tax  = '';
+
+  if ($current_url[(string) $num] === 'page') {
+    $pag_tax = $this->get_term_by_taxonomy($this->get_wub_tax($current_url[(string) ($num - 1)]));
+    $pag_tax = $pag_tax[0]->taxonomy;
+    self::$taxonomy = $pag_tax;
+    $taxObject = get_taxonomy($pag_tax);
+    $wub_post_or_tax = $pag_tax;
+    self::$post_type=$taxObject->object_type;
+    self::$type = 'tax';
+    self::$paged = true;
+
+    return self::$pattern;
+
+  }
+
+  if ($this->get_wub_tax($current_url[(string) $num])) {
+    $wub_post_or_tax = $this->get_wub_tax($current_url[(string) $num]);
+
+    self::$type = 'tax';
+    self::$taxonomy = $this->get_term_by_taxonomy($wub_post_or_tax);
+    $taxObject = get_taxonomy($wub_post_or_tax);
+    self::$post_type=$taxObject->object_type;
+  } else {
+    $wub_post_or_tax = $this->get_wub_post($current_url[(string) $num]);
+    self::$type = 'post';
+  }
+
+  if (!count($current_url) || (empty($wub_post_or_tax))) {
+    return false;
+  } else {
+    self::$pattern[] = $wub_post_or_tax;
+  }
+
+  if(count($current_url) === $num) {
+    return self::$pattern;
+  }
+  return $this->wub_is_valid($num + 1);
 }
 }
 
@@ -539,3 +557,5 @@ function wub_flush_on_post_save_callback() {
 
   wp_die();
 }
+
+ob_end_clean();
