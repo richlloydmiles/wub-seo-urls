@@ -127,9 +127,9 @@ Class Wub_seo_url {
       }
       $rewrite_string .= $value . '/';
     }
-    $pag_rewrite_string .= $rewrite_string . '('. self::$obj . ')' . '(/page/([0-9]+))/?$';
+    $pag_rewrite_string .= $rewrite_string . '('. self::$obj . ')' . '(/page/([0-9]+))/?(.*?)$';
 
-    $rewrite_string .= '('. self::$obj . ')' . '/?$';
+    $rewrite_string .= '('. self::$obj . ')' . '/?(.*?)$';
     $query = 'index.php?' . self::$taxonomy[0]->taxonomy . '='.self::$obj;
 
     if (self::$type === 'tax') {
