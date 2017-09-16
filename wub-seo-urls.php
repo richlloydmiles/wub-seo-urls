@@ -3,7 +3,7 @@
 * Plugin Name: Wub SEO URLS
 * Plugin URI: https://wubpress.com
 * Description: Creates Custom URL structures for WooCommerce
-* Version: 2.5
+* Version: 2.3
 * Author: Richard Miles
 * Author URI: https://wubpress.com
 * License: GPL12
