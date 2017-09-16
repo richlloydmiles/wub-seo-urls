@@ -3,7 +3,7 @@
 * Plugin Name: Wub SEO URLS
 * Plugin URI: https://wubpress.com
 * Description: Creates Custom URL structures for WooCommerce
-* Version: 2.4
+* Version: 2.5
 * Author: Richard Miles
 * Author URI: https://wubpress.com
 * License: GPL12
@@ -119,6 +119,7 @@ Class Wub_seo_url {
     if (!$pattern) {
       return;
     }
+
     $rewrite_string = '^';
     foreach ($pattern as $value) {
       if(end($pattern) == $value) {
@@ -127,6 +128,7 @@ Class Wub_seo_url {
       }
       $rewrite_string .= $value . '/';
     }
+
     $pag_rewrite_string .= $rewrite_string . '('. self::$obj . ')' . '(/page/([0-9]+))/?(.*?)$';
 
     $rewrite_string .= '('. self::$obj . ')' . '/?(.*?)$';
@@ -241,7 +243,7 @@ Class Wub_seo_url {
 
 
     //return if not set or default
-    if (!isset($wub_current_post_type_name) || $wub_current_post_type_name==='default') {
+    if (!isset($wub_current_post_type_name) || $wub_current_post_type_name === 'default') {
       return $url;
     }
 
@@ -250,194 +252,192 @@ Class Wub_seo_url {
     if (isset($parent_term->slug)) {
       $grand_parent_term = get_term($parent_term->parent, $wub_current_post_type_name);
       if (isset($grand_parent_term->slug)) {
-       if ($is_poly_active) {
-        $rewrite_string = $language . '/'. $grand_parent_term->slug . '/'. $parent_term->slug . '/' . $term->slug . '/';
+        if ($is_poly_active) {
+          $rewrite_string = $language . '/'. $grand_parent_term->slug . '/'. $parent_term->slug . '/' . $term->slug . '/';
+        } else {
+
+          $rewrite_string = $grand_parent_term->slug . '/'. $parent_term->slug . '/' . $term->slug . '/';
+        }
+
       } else {
+        if ($is_poly_active) {
+          $rewrite_string =  $language . '/'. $parent_term->slug . '/' . $term->slug . '/';
+        } else {
+          $rewrite_string = $parent_term->slug . '/' . $term->slug . '/';
+        }
 
-        $rewrite_string = $grand_parent_term->slug . '/'. $parent_term->slug . '/' . $term->slug . '/';
       }
-
     } else {
       if ($is_poly_active) {
-        $rewrite_string =  $language . '/'. $parent_term->slug . '/' . $term->slug . '/';
+        $rewrite_string = $language . '/'. $term->slug . '/';
       } else {
-       $rewrite_string = $parent_term->slug . '/' . $term->slug . '/';
-     }
+        $rewrite_string = $term->slug . '/';
+      }
+    }
 
-   }
- } else {
-   if ($is_poly_active) {
-    $rewrite_string = $language . '/'. $term->slug . '/';
-  } else {
-   $rewrite_string = $term->slug . '/';
- }
-}
+    $tax = get_taxonomy($wub_current_post_type_name);
 
-$tax = get_taxonomy($wub_current_post_type_name);
+    if (strpos($_SERVER['REQUEST_URI'], $tax->rewrite['slug']) !== false) {
+      header ('HTTP/1.1 301 Moved Permanently');
+      header ('Location: ' . home_url(user_trailingslashit($rewrite_string)));
+      exit();
+    }
 
-if (strpos($_SERVER['REQUEST_URI'], $tax->rewrite['slug']) !== false) {
-  header ('HTTP/1.1 301 Moved Permanently');
-  header ('Location: ' . home_url(user_trailingslashit($rewrite_string)));
-  exit();
-}
-
-return home_url(user_trailingslashit($rewrite_string));
-}
-
-/**
- * wub_post_custom_link filters through post links
- * @param  string  $post_link default post link
- * @param  integer $id        id of post type
- * @return string             string of new post link
- */
-public function wub_post_custom_link($post_link, $id = 0) {
-
-
-  $post = get_post($id);
-
-  $wub_current_post_type_name;
-
-  $sql_post_types = $this->custom_get_post_types();
-
-  $post_types = [];
-
-  foreach ($sql_post_types as $post_type) {
-    $post_types[] = $post_type->post_type;
+    return home_url(user_trailingslashit($rewrite_string));
   }
+
+  /**
+   * wub_post_custom_link filters through post links
+   * @param  string  $post_link default post link
+   * @param  integer $id        id of post type
+   * @return string             string of new post link
+   */
+  public function wub_post_custom_link($post_link, $id = 0) {
+    $post = get_post($id);
+
+    $wub_current_post_type_name;
+
+    $sql_post_types = $this->custom_get_post_types();
+
+    $post_types = [];
+
+    foreach ($sql_post_types as $post_type) {
+      $post_types[] = $post_type->post_type;
+    }
 
 
     //loops through each post type and matching taxonomy that has been selected
-  foreach ($post_types as $post_type) {
-    $taxonomy_name = get_option('wub_post_type_' . $post_type);
-    if ($post_type===$post->post_type && isset($taxonomy_name)) {
-      $wub_current_post_type_name = $taxonomy_name;
+    foreach ($post_types as $post_type) {
+      $taxonomy_name = get_option('wub_post_type_' . $post_type);
+      if ($post_type===$post->post_type && isset($taxonomy_name)) {
+        $wub_current_post_type_name = $taxonomy_name;
+      }
     }
-  }
 
-  if (class_exists('WPSEO_Primary_Term')) {
-    $cat = new WPSEO_Primary_Term($wub_current_post_type_name, $post->ID);
-    $cat = $cat->get_primary_term();
+    if (class_exists('WPSEO_Primary_Term')) {
+      $cat = new WPSEO_Primary_Term($wub_current_post_type_name, $post->ID);
+      $cat = $cat->get_primary_term();
 
-  }
+    }
 
-  $rewrite_string = '';
+    $rewrite_string = '';
 
-  if ($cat) {
+    if ($cat) {
 
-    $term = get_term($cat);
+      $term = get_term($cat);
 
-    $parent_term = get_term($term->parent, $wub_current_post_type_name);
+      $parent_term = get_term($term->parent, $wub_current_post_type_name);
 
-    if (isset($parent_term->slug)) {
-      $grand_parent_term = get_term($parent_term->parent, $wub_current_post_type_name);
+      if (isset($parent_term->slug)) {
+        $grand_parent_term = get_term($parent_term->parent, $wub_current_post_type_name);
 
-      if (isset($grand_parent_term->slug)) {
+        if (isset($grand_parent_term->slug)) {
 
-        $great_grand_parent_term = get_term($grand_parent_term->parent, $wub_current_post_type_name);
+          $great_grand_parent_term = get_term($grand_parent_term->parent, $wub_current_post_type_name);
 
-        if(isset($great_grand_parent_term->slug)) {
-          $rewrite_string .= $great_grand_parent_term->slug . '/' . $grand_parent_term->slug . '/' . $parent_term->slug . '/' . $term->slug.'/';
+          if(isset($great_grand_parent_term->slug)) {
+            $rewrite_string .= $great_grand_parent_term->slug . '/' . $grand_parent_term->slug . '/' . $parent_term->slug . '/' . $term->slug.'/';
+          } else {
+            $rewrite_string .= $grand_parent_term->slug . '/' . $parent_term->slug . '/' . $term->slug.'/';
+          }
         } else {
-          $rewrite_string .= $grand_parent_term->slug . '/' . $parent_term->slug . '/' . $term->slug.'/';
+          $rewrite_string .= $parent_term->slug . '/' . $term->slug.'/';
         }
       } else {
-        $rewrite_string .= $parent_term->slug . '/' . $term->slug.'/';
+        $rewrite_string .= $term->slug.'/';
       }
     } else {
-      $rewrite_string .= $term->slug.'/';
-    }
-  } else {
 
-    if (!isset($wub_current_post_type_name) || $wub_current_post_type_name==='default') {
-      return $post_link;
-    }
+      if (!isset($wub_current_post_type_name) || $wub_current_post_type_name==='default') {
+        return $post_link;
+      }
 
-    $terms = wp_get_post_terms($post->ID, $wub_current_post_type_name, ['fields' => 'slugs', 'orderby' => 'term_id']);
+      $terms = wp_get_post_terms($post->ID, $wub_current_post_type_name, ['fields' => 'slugs', 'orderby' => 'parent', 'order' => 'DESC']);
 
-    if (isset($terms)) {
-      foreach ($terms as $term) {
-        $rewrite_string .= $term.'/';
+      if (isset($terms)) {
+        foreach ($terms as $term) {
+          $rewrite_string .= $term.'/';
+        }
       }
     }
+
+    $rewrite_string .= $post->post_name . '/';
+
+    if (strpos($_SERVER['REQUEST_URI'], $post->post_type . '/'.$post->post_name) !== false) {
+      header ('HTTP/1.1 301 Moved Permanently');
+      header ('Location: ' . home_url(user_trailingslashit($rewrite_string)));
+      exit();
+    }
+
+
+    return home_url(user_trailingslashit($rewrite_string));
+  }
+  public function get_term_by_taxonomy($term) {
+    global $wpdb;
+    $a = $wpdb->get_results($wpdb->prepare("SELECT wp_term_taxonomy.taxonomy FROM wp_term_taxonomy INNER JOIN wp_terms ON wp_term_taxonomy.term_id=wp_terms.term_id WHERE wp_terms.slug = %s", $term));
+
+    return $a;
   }
 
-  $rewrite_string .= $post->post_name . '/';
+  public function get_wub_post($post_name) {
+    global $wpdb;
+    $a = $wpdb->get_results($wpdb->prepare("SELECT post_name, post_type FROM wp_posts WHERE post_name = '%s'", $post_name));
 
-  if (strpos($_SERVER['REQUEST_URI'], $post->post_type . '/'.$post->post_name) !== false) {
-    header ('HTTP/1.1 301 Moved Permanently');
-    header ('Location: ' . home_url(user_trailingslashit($rewrite_string)));
-    exit();
+    self::$post_type=$post = $a[0]->post_type;
+
+    return $a[0]->post_name;
   }
 
 
-  return home_url(user_trailingslashit($rewrite_string));
-}
-public function get_term_by_taxonomy($term) {
-  global $wpdb;
-  $a = $wpdb->get_results($wpdb->prepare("SELECT wp_term_taxonomy.taxonomy FROM wp_term_taxonomy INNER JOIN wp_terms ON wp_term_taxonomy.term_id=wp_terms.term_id WHERE wp_terms.slug = %s", $term));
+  public function get_wub_tax($tax_name) {
+    global $wpdb;
+    $a = $wpdb->get_results($wpdb->prepare("SELECT slug FROM wp_terms WHERE slug = %s", $tax_name));
 
-  return $a;
-}
-
-public function get_wub_post($post_name) {
-  global $wpdb;
-  $a = $wpdb->get_results($wpdb->prepare("SELECT post_name, post_type FROM wp_posts WHERE post_name = '%s'", $post_name));
-
-  self::$post_type=$post = $a[0]->post_type;
-
-  return $a[0]->post_name;
-}
-
-
-public function get_wub_tax($tax_name) {
-  global $wpdb;
-  $a = $wpdb->get_results($wpdb->prepare("SELECT slug FROM wp_terms WHERE slug = %s", $tax_name));
-
-  return $a[0]->slug;
-}
-
-public function wub_is_valid($num = 0) {
-
-  $current_url = array_filter(explode('/', $_SERVER['REQUEST_URI']), 'strlen');
-  $wub_post_or_tax  = '';
-
-  if ($current_url[(string) $num] === 'page') {
-    $pag_tax = $this->get_term_by_taxonomy($this->get_wub_tax($current_url[(string) ($num - 1)]));
-    $pag_tax = $pag_tax[0]->taxonomy;
-    self::$taxonomy = $pag_tax;
-    $taxObject = get_taxonomy($pag_tax);
-    $wub_post_or_tax = $pag_tax;
-    self::$post_type=$taxObject->object_type;
-    self::$type = 'tax';
-    self::$paged = true;
-
-    return self::$pattern;
-
+    return $a[0]->slug;
   }
 
-  if ($this->get_wub_tax($current_url[(string) $num])) {
-    $wub_post_or_tax = $this->get_wub_tax($current_url[(string) $num]);
+  public function wub_is_valid($num = 0) {
 
-    self::$type = 'tax';
-    self::$taxonomy = $this->get_term_by_taxonomy($wub_post_or_tax);
-    $taxObject = get_taxonomy($wub_post_or_tax);
-    self::$post_type=$taxObject->object_type;
-  } else {
-    $wub_post_or_tax = $this->get_wub_post($current_url[(string) $num]);
-    self::$type = 'post';
-  }
+    $current_url = array_filter(explode('/', $_SERVER['REQUEST_URI']), 'strlen');
+    $wub_post_or_tax  = '';
 
-  if (!count($current_url) || (empty($wub_post_or_tax))) {
-    return false;
-  } else {
-    self::$pattern[] = $wub_post_or_tax;
-  }
+    if ($current_url[(string) $num] === 'page') {
+      $pag_tax = $this->get_term_by_taxonomy($this->get_wub_tax($current_url[(string) ($num - 1)]));
+      $pag_tax = $pag_tax[0]->taxonomy;
+      self::$taxonomy = $pag_tax;
+      $taxObject = get_taxonomy($pag_tax);
+      $wub_post_or_tax = $pag_tax;
+      self::$post_type=$taxObject->object_type;
+      self::$type = 'tax';
+      self::$paged = true;
 
-  if(count($current_url) === $num) {
-    return self::$pattern;
+      return self::$pattern;
+
+    }
+
+    if ($this->get_wub_tax($current_url[(string) $num])) {
+      $wub_post_or_tax = $this->get_wub_tax($current_url[(string) $num]);
+
+      self::$type = 'tax';
+      self::$taxonomy = $this->get_term_by_taxonomy($wub_post_or_tax);
+      $taxObject = get_taxonomy($wub_post_or_tax);
+      self::$post_type=$taxObject->object_type;
+    } else {
+      $wub_post_or_tax = $this->get_wub_post($current_url[(string) $num]);
+      self::$type = 'post';
+    }
+
+    if (!count($current_url) || (empty($wub_post_or_tax))) {
+      return false;
+    } else {
+      self::$pattern[] = $wub_post_or_tax;
+    }
+
+    if(count($current_url) === $num) {
+      return self::$pattern;
+    }
+    return $this->wub_is_valid($num + 1);
   }
-  return $this->wub_is_valid($num + 1);
-}
 }
 
 //instaniate object of wub_seo_url post type
@@ -460,9 +460,9 @@ function wub_flush_permalinks_on_save($post_id) {
   }
 }
 
-require_once( WUB_PLUGIN_PATH . 'includes/class-wp-license-manager-client.php' );
+require_once(WUB_PLUGIN_PATH . 'includes/class-wp-license-manager-client.php');
 
-if ( is_admin() ) {
+if (is_admin()) {
   $license_manager = new Wp_License_Manager_Client(
     'wub-seo-urls',
     'Wub SEO',
@@ -470,17 +470,14 @@ if ( is_admin() ) {
     'https://wubpress.com/api/license-manager/v1',
     'plugin',
     __FILE__
-    );
+  );
 }
 
-add_action( 'wp_ajax_wub_post_type', 'wub_post_type_callback' );
+add_action('wp_ajax_wub_post_type', 'wub_post_type_callback');
 
 function wub_post_type_callback() {
-
   $option_name = 'wub_post_type_' . $_POST['wub_post_type'];
-
   $new_value = $_POST['wub_post_type_value'];
-
   if (get_option($option_name) !== false ) {
     // The option already exists, so we just update it.
     update_option($option_name, $new_value);
@@ -498,7 +495,7 @@ function wub_post_type_callback() {
   wp_die();
 }
 
-add_action( 'wp_ajax_wub_get_all_post_type', 'wub_get_all_post_type_callback' );
+add_action('wp_ajax_wub_get_all_post_type', 'wub_get_all_post_type_callback');
 
 function wub_get_all_post_type_callback() {
 
@@ -516,12 +513,10 @@ function wub_get_all_post_type_callback() {
   wp_die();
 }
 
-add_action( 'wp_ajax_wub_get_flush_checked', 'wub_get_flush_checked_callback' );
+add_action('wp_ajax_wub_get_flush_checked', 'wub_get_flush_checked_callback');
 
 function wub_get_flush_checked_callback() {
-
   echo get_option('wub_checked');
-
   wp_die();
 }
 
@@ -538,9 +533,7 @@ function wub_flush_permalinks_ajax_callback() {
 add_action( 'wp_ajax_wub_flush_on_post_save', 'wub_flush_on_post_save_callback' );
 
 function wub_flush_on_post_save_callback() {
-
   $option_name = 'wub_checked';
-
   $new_value = $_POST['wub_checked'];
 
   if (get_option($option_name) !== false ) {
